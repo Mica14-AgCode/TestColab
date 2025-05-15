@@ -1,4 +1,4 @@
-# app.py - Versión mínima con dependencias nativas
+# app.py - Streamlit app adaptada a tu estructura de Drive existente
 import streamlit as st
 import pandas as pd
 import json
@@ -13,17 +13,27 @@ st.set_page_config(
     page_icon="🔄"
 )
 
-st.title("Prueba de integración Streamlit-Colab")
-st.subheader("Versión con dependencias nativas")
+st.title("Prueba de integración con notebook Streamlit de Colab")
+st.subheader("Versión específica para tu notebook existente")
 
-# Definir rutas locales (simular Drive)
-BASE_DIR = "streamlit_colab_test"
-INPUT_DIR = os.path.join(BASE_DIR, "input")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+# Carpetas locales para simulación - estas son las carpetas donde guardarás temporalmente
+# los archivos antes de transferirlos a Drive
+LOCAL_DIR = "streamlit_colab_test_local"
+LOCAL_INPUT_DIR = os.path.join(LOCAL_DIR, "input")
+LOCAL_OUTPUT_DIR = os.path.join(LOCAL_DIR, "output")
 
-# Crear carpetas si no existen
-os.makedirs(INPUT_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Crear carpetas locales si no existen
+os.makedirs(LOCAL_INPUT_DIR, exist_ok=True)
+os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
+
+# Mostrar rutas de Drive para el usuario
+st.info("""
+### Carpetas correspondientes en Google Drive:
+- Carpeta de entrada: `/content/drive/MyDrive/Colab Notebooks/streamlit_input/`
+- Carpeta de salida: `/content/drive/MyDrive/Colab Notebooks/streamlit_output/`
+
+Estas carpetas se crearán automáticamente cuando ejecutes el código en tu notebook de Colab.
+""")
 
 # Función para guardar un número para ser procesado por Colab
 def enviar_a_colab(numero):
@@ -38,8 +48,8 @@ def enviar_a_colab(numero):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
-    # Guardar en archivo
-    ruta_archivo = os.path.join(INPUT_DIR, f"{id_tarea}.json")
+    # Guardar en archivo local
+    ruta_archivo = os.path.join(LOCAL_INPUT_DIR, f"{id_tarea}.json")
     with open(ruta_archivo, 'w') as f:
         json.dump(datos, f, indent=2)
     
@@ -48,7 +58,7 @@ def enviar_a_colab(numero):
 # Función para verificar si Colab ha procesado un número
 def verificar_resultado(id_tarea):
     """Verifica si hay resultados disponibles para el ID dado"""
-    ruta_resultado = os.path.join(OUTPUT_DIR, f"{id_tarea}_resultado.json")
+    ruta_resultado = os.path.join(LOCAL_OUTPUT_DIR, f"{id_tarea}_resultado.json")
     
     if os.path.exists(ruta_resultado):
         with open(ruta_resultado, 'r') as f:
@@ -61,26 +71,28 @@ if "tareas" not in st.session_state:
     st.session_state.tareas = []
 
 # Instrucciones
-st.info("""
-### Instrucciones:
-1. Ingresa un número abajo y haz clic en "Procesar en Colab"
-2. La app guardará un archivo JSON en la carpeta `streamlit_colab_test/input/`
-3. Copia manualmente este archivo a Google Drive (o configura una carpeta compartida)
-4. Ejecuta el notebook de Colab que procesará el archivo
-5. Colab guardará los resultados en una carpeta de salida
-6. Copia el archivo de resultados a la carpeta `streamlit_colab_test/output/` en tu máquina
-7. Haz clic en "Verificar resultados" para ver los resultados procesados
+st.markdown("""
+### Instrucciones para probar la integración:
+
+1. **Paso 1:** Ingresa un número abajo y haz clic en "Procesar en Colab"
+2. **Paso 2:** La app creará un archivo JSON en la carpeta local
+3. **Paso 3:** Copia este archivo a Google Drive en la carpeta `/content/drive/MyDrive/Colab Notebooks/streamlit_input/`
+4. **Paso 4:** Abre tu notebook "Streamlit" en Google Colab
+5. **Paso 5:** Pega el código proporcionado en una celda y ejecútalo
+6. **Paso 6:** El notebook procesará el archivo y guardará los resultados en `/content/drive/MyDrive/Colab Notebooks/streamlit_output/`
+7. **Paso 7:** Copia el archivo de resultados a tu carpeta local `{LOCAL_OUTPUT_DIR}`
+8. **Paso 8:** Regresa aquí y haz clic en "Verificar resultados" para ver los resultados
 """)
 
-# Ubicación de archivos
-st.code(f"Carpeta de entrada: {os.path.abspath(INPUT_DIR)}")
-st.code(f"Carpeta de salida: {os.path.abspath(OUTPUT_DIR)}")
+# Ubicación de archivos locales
+st.code(f"Carpeta local de entrada: {os.path.abspath(LOCAL_INPUT_DIR)}")
+st.code(f"Carpeta local de salida: {os.path.abspath(LOCAL_OUTPUT_DIR)}")
 
 # Formulario para ingresar un número
 st.header("Ingresa un número para procesar en Colab")
 
 with st.form("form_numero"):
-    numero = st.number_input("Número", min_value=1, max_value=100, value=42)
+    numero = st.number_input("Número", min_value=1, max_value=1000, value=42)
     submitted = st.form_submit_button("Procesar en Colab")
     
     if submitted:
@@ -101,11 +113,13 @@ with st.form("form_numero"):
             st.code(f"Ruta del archivo: {ruta_archivo}")
             
             # Instrucciones para el usuario
-            st.write("### Próximos pasos:")
-            st.write("1. Copia este archivo a Google Drive (carpeta que Colab pueda acceder)")
-            st.write("2. Ejecuta el notebook de Colab para procesar el archivo")
-            st.write("3. Copia el archivo de resultados a la carpeta de salida local")
-            st.write("4. Haz clic en 'Verificar resultados' para ver los resultados")
+            st.markdown("""
+            ### Próximos pasos:
+            1. Copia este archivo a la carpeta `/content/drive/MyDrive/Colab Notebooks/streamlit_input/` en Google Drive
+            2. Ejecuta tu notebook "Streamlit" en Colab con el código proporcionado
+            3. Copia el archivo de resultados de Google Drive a tu carpeta local de salida
+            4. Haz clic en "Verificar resultados" para ver los resultados
+            """)
 
 # Mostrar tareas y resultados
 if st.session_state.tareas:
@@ -154,7 +168,7 @@ if st.session_state.tareas:
                     
                 else:
                     st.warning(f"Aún no hay resultados disponibles en: {ruta_resultado}")
-                    st.info("Asegúrate de que Colab haya procesado el archivo y hayas copiado el resultado a la carpeta de salida.")
+                    st.info("Asegúrate de que Colab haya procesado el archivo y hayas copiado el resultado a la carpeta de salida local.")
             
             # Si ya tenemos el resultado, mostrarlo
             if tarea.get('estado') == "completado" and 'resultado' in tarea:
@@ -190,4 +204,4 @@ else:
 
 # Información adicional
 st.markdown("---")
-st.caption("Versión minimalista para prueba de concepto Streamlit-Colab")
+st.caption("Versión adaptada para trabajar con tu notebook 'Streamlit' existente")
