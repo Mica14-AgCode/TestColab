@@ -1,4 +1,4 @@
-# app.py - Aplicación Streamlit con conexión automática a Colab
+# app.py - Versión para Streamlit Cloud
 import streamlit as st
 import pandas as pd
 import requests
@@ -7,13 +7,13 @@ from datetime import datetime
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Conexión Streamlit-Colab",
+    page_title="Streamlit Cloud ↔ Colab",
     page_icon="🔄",
     layout="wide"
 )
 
-st.title("Conexión automática entre Streamlit y Colab")
-st.subheader("Usando API REST en tiempo real")
+st.title("Conexión Streamlit Cloud ↔ Google Colab")
+st.subheader("Integración completamente en la nube")
 
 # Configuración de la URL de la API
 # Esta URL se obtiene al ejecutar el código de la API en Colab
@@ -33,13 +33,13 @@ def verificar_conexion(url):
             # Intentar la ruta específica de status
             status_response = requests.get(f"{url}/status", timeout=5)
             if status_response.status_code == 200:
-                return True, "Conexión exitosa a la API de Colab"
+                return True, "Conexión exitosa a la API de Colab", status_response.json()
             else:
-                return False, f"Error en la ruta /status: {status_response.status_code}"
+                return False, f"Error en la ruta /status: {status_response.status_code}", None
         else:
-            return False, f"Error al conectar: Código {response.status_code}"
+            return False, f"Error al conectar: Código {response.status_code}", None
     except Exception as e:
-        return False, f"Error de conexión: {str(e)}"
+        return False, f"Error de conexión: {str(e)}", None
 
 # Función para enviar un número a la API de Colab
 def procesar_en_colab(url, numero):
@@ -91,11 +91,13 @@ with st.form("config_form"):
                 api_url = api_url[:-1]
                 
             # Intentar conectar a la API
-            exito, mensaje = verificar_conexion(api_url)
+            exito, mensaje, status_info = verificar_conexion(api_url)
             
             if exito:
                 st.session_state.api_url = api_url
                 st.success(mensaje)
+                if status_info:
+                    st.info(f"Servidor Colab activo desde: {status_info.get('timestamp', 'desconocido')}")
             else:
                 st.error(mensaje)
 
@@ -163,49 +165,86 @@ if st.session_state.solicitudes:
             with st.expander("Ver respuesta JSON completa"):
                 st.json(resultado)
 
-# Instrucciones
-with st.expander("❓ Instrucciones de uso"):
+# Instrucciones y explicación para Streamlit Cloud
+st.markdown("---")
+with st.expander("🔍 Cómo funciona esta integración", expanded=True):
     st.markdown("""
-    ### Cómo probar la conexión automática entre Streamlit y Colab:
+    ### Integración Streamlit Cloud ↔ Google Colab
     
-    1. **En Google Colab:**
-       - Abre tu notebook "Streamlit" existente
-       - Crea una nueva celda
-       - Copia todo el código de la sección "API en Colab"
-       - Ejecuta la celda
-       - Espera a que se configure el túnel ngrok
-       - Copia la URL que aparece (algo como https://xxxx-xx-xx-xxx-xx.ngrok.io)
+    Esta aplicación demuestra una conexión directa entre Streamlit Cloud y un notebook de Google Colab.
     
-    2. **En esta aplicación Streamlit:**
-       - Pega la URL en el campo del paso 1
-       - Haz clic en "Guardar y verificar conexión"
-       - Si la conexión es exitosa, verás un mensaje verde
+    **Flujo de trabajo:**
     
-    3. **Prueba la integración:**
-       - Ingresa un número en el campo del paso 2
-       - Haz clic en "Procesar en Colab"
-       - Streamlit enviará el número a Colab a través de la API
-       - Colab procesará el número y devolverá los resultados
-       - Los resultados se mostrarán automáticamente en Streamlit
+    1. **Google Colab** ejecuta un servidor API usando Flask y lo expone a internet con ngrok.
+    2. **Streamlit Cloud** se conecta directamente a este servidor a través de solicitudes HTTP.
+    3. Puedes enviar datos desde Streamlit, procesarlos en Colab, y recibir los resultados automáticamente.
     
-    **Nota:** Esta es una conexión en tiempo real. No se necesitan pasos manuales ni transferencia de archivos.
+    **Ventajas:**
+    
+    - Ambos componentes funcionan en la nube (no se necesita nada local)
+    - Comunicación bidireccional en tiempo real
+    - Puedes utilizar todo el poder de procesamiento de Colab
+    - Interfaz amigable con Streamlit
+    
+    **Limitaciones:**
+    
+    - La URL de ngrok cambia cada vez que reinicies el notebook de Colab
+    - Las sesiones gratuitas de Colab tienen tiempo limitado
+    
+    Si necesitas una solución más permanente, considera implementar un servidor en Google Cloud Run o similar.
     """)
 
-# Información del estado de la conexión
+# Información para implementar en Streamlit Cloud
+with st.expander("📋 Implementación en Streamlit Cloud"):
+    st.markdown("""
+    ### Cómo implementar esta app en Streamlit Cloud
+    
+    Para implementar esta aplicación en Streamlit Cloud:
+    
+    1. **Crea un repositorio en GitHub** con estos archivos:
+       - `app.py` (este código)
+       - `requirements.txt` (con las dependencias: streamlit, pandas, requests)
+    
+    2. **Despliega en Streamlit Cloud:**
+       - Inicia sesión en [share.streamlit.io](https://share.streamlit.io)
+       - Conecta tu repositorio de GitHub
+       - Configura el despliegue
+    
+    3. **Configura tu notebook de Colab:**
+       - Crea una API como la descrita aquí
+       - Copia la URL de ngrok generada
+    
+    4. **Conecta ambos sistemas:**
+       - Pega la URL de ngrok en esta aplicación
+       - ¡Disfruta de la integración!
+    """)
+
+# Sidebar con estado e información adicional
 st.sidebar.header("Estado de la conexión")
 if st.session_state.api_url:
     st.sidebar.success(f"✅ Conectado a: {st.session_state.api_url}")
     
     if st.sidebar.button("Verificar estado"):
-        exito, mensaje = verificar_conexion(st.session_state.api_url)
+        exito, mensaje, status_info = verificar_conexion(st.session_state.api_url)
         if exito:
             st.sidebar.success(mensaje)
+            if status_info:
+                st.sidebar.info(f"Servidor activo desde: {status_info.get('timestamp', 'desconocido')}")
         else:
             st.sidebar.error(mensaje)
 else:
     st.sidebar.warning("❌ No conectado")
     st.sidebar.info("Configura la URL de la API en el paso 1")
 
-# Información adicional
+# Archivo requirements.txt
 st.sidebar.markdown("---")
-st.sidebar.caption("Integración en tiempo real Streamlit-Colab")
+st.sidebar.subheader("Archivo requirements.txt")
+st.sidebar.code("""
+streamlit==1.22.0
+pandas==1.5.3
+requests==2.28.2
+""")
+
+# Nota de implementación
+st.sidebar.markdown("---")
+st.sidebar.caption("Integración Streamlit Cloud ↔ Google Colab")
