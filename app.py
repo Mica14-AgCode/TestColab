@@ -1,207 +1,211 @@
-# app.py - Streamlit app adaptada a tu estructura de Drive existente
+# app.py - Aplicación Streamlit con conexión automática a Colab
 import streamlit as st
 import pandas as pd
+import requests
 import json
-import os
-import uuid
-import time
 from datetime import datetime
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Test Streamlit-Colab",
-    page_icon="🔄"
+    page_title="Conexión Streamlit-Colab",
+    page_icon="🔄",
+    layout="wide"
 )
 
-st.title("Prueba de integración con notebook Streamlit de Colab")
-st.subheader("Versión específica para tu notebook existente")
+st.title("Conexión automática entre Streamlit y Colab")
+st.subheader("Usando API REST en tiempo real")
 
-# Carpetas locales para simulación - estas son las carpetas donde guardarás temporalmente
-# los archivos antes de transferirlos a Drive
-LOCAL_DIR = "streamlit_colab_test_local"
-LOCAL_INPUT_DIR = os.path.join(LOCAL_DIR, "input")
-LOCAL_OUTPUT_DIR = os.path.join(LOCAL_DIR, "output")
+# Configuración de la URL de la API
+# Esta URL se obtiene al ejecutar el código de la API en Colab
+if "api_url" not in st.session_state:
+    st.session_state.api_url = ""
 
-# Crear carpetas locales si no existen
-os.makedirs(LOCAL_INPUT_DIR, exist_ok=True)
-os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
+# Almacenar resultados de las solicitudes
+if "solicitudes" not in st.session_state:
+    st.session_state.solicitudes = []
 
-# Mostrar rutas de Drive para el usuario
-st.info("""
-### Carpetas correspondientes en Google Drive:
-- Carpeta de entrada: `/content/drive/MyDrive/Colab Notebooks/streamlit_input/`
-- Carpeta de salida: `/content/drive/MyDrive/Colab Notebooks/streamlit_output/`
+# Función para verificar la conexión a la API
+def verificar_conexion(url):
+    try:
+        # Intentar conectar a la URL base
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            # Intentar la ruta específica de status
+            status_response = requests.get(f"{url}/status", timeout=5)
+            if status_response.status_code == 200:
+                return True, "Conexión exitosa a la API de Colab"
+            else:
+                return False, f"Error en la ruta /status: {status_response.status_code}"
+        else:
+            return False, f"Error al conectar: Código {response.status_code}"
+    except Exception as e:
+        return False, f"Error de conexión: {str(e)}"
 
-Estas carpetas se crearán automáticamente cuando ejecutes el código en tu notebook de Colab.
-""")
+# Función para enviar un número a la API de Colab
+def procesar_en_colab(url, numero):
+    try:
+        # Preparar datos para enviar
+        datos = {
+            "numero": numero
+        }
+        
+        # Realizar la solicitud POST a la API
+        response = requests.post(
+            f"{url}/procesar", 
+            json=datos,
+            timeout=10
+        )
+        
+        # Verificar respuesta
+        if response.status_code == 200:
+            resultado = response.json()
+            return True, resultado
+        else:
+            return False, f"Error: Código {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        return False, f"Error al procesar: {str(e)}"
 
-# Función para guardar un número para ser procesado por Colab
-def enviar_a_colab(numero):
-    """Guarda un número en un archivo para que Colab lo procese"""
-    # Crear ID único
-    id_tarea = str(uuid.uuid4())[:8]  # Versión corta para facilitar la lectura
+# Sección para configurar la URL de la API
+st.header("1. Configurar conexión con Colab")
+
+with st.form("config_form"):
+    api_url = st.text_input(
+        "URL de la API de Colab (generada por ngrok)", 
+        value=st.session_state.api_url,
+        placeholder="https://xxxx-xx-xx-xxx-xx.ngrok.io"
+    )
     
-    # Crear un diccionario con los datos
-    datos = {
-        "id": id_tarea,
-        "numero": numero,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    
-    # Guardar en archivo local
-    ruta_archivo = os.path.join(LOCAL_INPUT_DIR, f"{id_tarea}.json")
-    with open(ruta_archivo, 'w') as f:
-        json.dump(datos, f, indent=2)
-    
-    return id_tarea, ruta_archivo
-
-# Función para verificar si Colab ha procesado un número
-def verificar_resultado(id_tarea):
-    """Verifica si hay resultados disponibles para el ID dado"""
-    ruta_resultado = os.path.join(LOCAL_OUTPUT_DIR, f"{id_tarea}_resultado.json")
-    
-    if os.path.exists(ruta_resultado):
-        with open(ruta_resultado, 'r') as f:
-            return json.load(f), ruta_resultado
-    
-    return None, ruta_resultado
-
-# Inicializar el estado de la sesión si es necesario
-if "tareas" not in st.session_state:
-    st.session_state.tareas = []
-
-# Instrucciones
-st.markdown("""
-### Instrucciones para probar la integración:
-
-1. **Paso 1:** Ingresa un número abajo y haz clic en "Procesar en Colab"
-2. **Paso 2:** La app creará un archivo JSON en la carpeta local
-3. **Paso 3:** Copia este archivo a Google Drive en la carpeta `/content/drive/MyDrive/Colab Notebooks/streamlit_input/`
-4. **Paso 4:** Abre tu notebook "Streamlit" en Google Colab
-5. **Paso 5:** Pega el código proporcionado en una celda y ejecútalo
-6. **Paso 6:** El notebook procesará el archivo y guardará los resultados en `/content/drive/MyDrive/Colab Notebooks/streamlit_output/`
-7. **Paso 7:** Copia el archivo de resultados a tu carpeta local `{LOCAL_OUTPUT_DIR}`
-8. **Paso 8:** Regresa aquí y haz clic en "Verificar resultados" para ver los resultados
-""")
-
-# Ubicación de archivos locales
-st.code(f"Carpeta local de entrada: {os.path.abspath(LOCAL_INPUT_DIR)}")
-st.code(f"Carpeta local de salida: {os.path.abspath(LOCAL_OUTPUT_DIR)}")
-
-# Formulario para ingresar un número
-st.header("Ingresa un número para procesar en Colab")
-
-with st.form("form_numero"):
-    numero = st.number_input("Número", min_value=1, max_value=1000, value=42)
-    submitted = st.form_submit_button("Procesar en Colab")
+    submitted = st.form_submit_button("Guardar y verificar conexión")
     
     if submitted:
-        with st.spinner("Preparando archivo para Colab..."):
-            # Enviamos el número
-            id_tarea, ruta_archivo = enviar_a_colab(numero)
+        if not api_url:
+            st.error("Por favor, ingresa la URL de la API")
+        else:
+            # Verificar que la URL es válida
+            if not api_url.startswith("http"):
+                api_url = "https://" + api_url
             
-            # Guardamos la tarea en el estado
-            st.session_state.tareas.append({
-                "id": id_tarea,
-                "numero": numero,
-                "timestamp": datetime.now(),
-                "estado": "pendiente"
+            # Eliminar barra al final si existe
+            if api_url.endswith("/"):
+                api_url = api_url[:-1]
+                
+            # Intentar conectar a la API
+            exito, mensaje = verificar_conexion(api_url)
+            
+            if exito:
+                st.session_state.api_url = api_url
+                st.success(mensaje)
+            else:
+                st.error(mensaje)
+
+# Sección para enviar solicitudes a Colab
+st.header("2. Enviar número para procesar en Colab")
+
+if st.session_state.api_url:
+    with st.form("procesar_form"):
+        numero = st.number_input("Número a procesar", min_value=1, max_value=1000, value=42)
+        procesar_submitted = st.form_submit_button("Procesar en Colab")
+        
+        if procesar_submitted:
+            with st.spinner("Conectando con Colab..."):
+                exito, resultado = procesar_en_colab(st.session_state.api_url, numero)
+                
+                if exito:
+                    # Guardar resultado en el historial
+                    st.session_state.solicitudes.append({
+                        "id": len(st.session_state.solicitudes) + 1,
+                        "numero": numero,
+                        "timestamp": datetime.now(),
+                        "resultado": resultado
+                    })
+                    st.success("¡Procesamiento exitoso!")
+                else:
+                    st.error(f"Error al procesar: {resultado}")
+else:
+    st.info("Primero configura la URL de la API de Colab en el paso 1.")
+
+# Mostrar resultados de las solicitudes
+if st.session_state.solicitudes:
+    st.header("3. Resultados procesados por Colab")
+    
+    for i, solicitud in enumerate(st.session_state.solicitudes):
+        with st.expander(f"Solicitud {solicitud['id']}: Número {solicitud['numero']}", expanded=(i==len(st.session_state.solicitudes)-1)):
+            st.write(f"Enviada: {solicitud['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            resultado = solicitud['resultado']
+            
+            # Crear una tabla con los resultados
+            df = pd.DataFrame({
+                'Métrica': [
+                    'Número original',
+                    'Cuadrado',
+                    'Raíz cuadrada',
+                    'Doble',
+                    'Mitad'
+                ],
+                'Valor': [
+                    resultado.get('numero_original', 'N/A'),
+                    resultado.get('cuadrado', 'N/A'),
+                    resultado.get('raiz_cuadrada', 'N/A'),
+                    resultado.get('doble', 'N/A'),
+                    resultado.get('mitad', 'N/A')
+                ]
             })
             
-            st.success(f"¡Archivo creado con éxito!")
-            st.info(f"ID de tarea: {id_tarea}")
-            st.code(f"Ruta del archivo: {ruta_archivo}")
+            st.dataframe(df)
             
-            # Instrucciones para el usuario
-            st.markdown("""
-            ### Próximos pasos:
-            1. Copia este archivo a la carpeta `/content/drive/MyDrive/Colab Notebooks/streamlit_input/` en Google Drive
-            2. Ejecuta tu notebook "Streamlit" en Colab con el código proporcionado
-            3. Copia el archivo de resultados de Google Drive a tu carpeta local de salida
-            4. Haz clic en "Verificar resultados" para ver los resultados
-            """)
+            # Información adicional
+            st.info(f"Procesado por: {resultado.get('procesado_por', 'Desconocido')}")
+            st.text(f"Timestamp: {resultado.get('timestamp', 'N/A')}")
+            
+            # Ver datos JSON completos
+            with st.expander("Ver respuesta JSON completa"):
+                st.json(resultado)
 
-# Mostrar tareas y resultados
-if st.session_state.tareas:
-    st.header("Tareas enviadas a Colab")
+# Instrucciones
+with st.expander("❓ Instrucciones de uso"):
+    st.markdown("""
+    ### Cómo probar la conexión automática entre Streamlit y Colab:
     
-    for i, tarea in enumerate(st.session_state.tareas):
-        with st.expander(f"Tarea {i+1}: Número {tarea['numero']} - {tarea['estado'].capitalize()}", expanded=(i==0)):
-            st.write(f"ID de tarea: {tarea['id']}")
-            st.write(f"Enviada: {tarea['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            # Botón para verificar el resultado
-            if st.button(f"Verificar resultado #{i+1}"):
-                resultado, ruta_resultado = verificar_resultado(tarea['id'])
-                
-                if resultado:
-                    # Actualizar estado
-                    st.session_state.tareas[i]['estado'] = "completado"
-                    st.session_state.tareas[i]['resultado'] = resultado
-                    
-                    # Mostrar el resultado
-                    st.success("¡Resultado procesado por Colab encontrado!")
-                    
-                    # Crear una tabla con los resultados
-                    df = pd.DataFrame({
-                        'Métrica': [
-                            'Número original',
-                            'Cuadrado',
-                            'Raíz cuadrada',
-                            'Doble',
-                            'Mitad'
-                        ],
-                        'Valor': [
-                            resultado.get('numero_original', 'N/A'),
-                            resultado.get('cuadrado', 'N/A'),
-                            resultado.get('raiz_cuadrada', 'N/A'),
-                            resultado.get('doble', 'N/A'),
-                            resultado.get('mitad', 'N/A')
-                        ]
-                    })
-                    
-                    st.dataframe(df)
-                    
-                    # Información adicional
-                    st.info(f"Procesado por: {resultado.get('procesado_por', 'Desconocido')}")
-                    st.text(f"Timestamp: {resultado.get('timestamp', 'N/A')}")
-                    
-                else:
-                    st.warning(f"Aún no hay resultados disponibles en: {ruta_resultado}")
-                    st.info("Asegúrate de que Colab haya procesado el archivo y hayas copiado el resultado a la carpeta de salida local.")
-            
-            # Si ya tenemos el resultado, mostrarlo
-            if tarea.get('estado') == "completado" and 'resultado' in tarea:
-                resultado = tarea['resultado']
-                
-                st.success("Resultado procesado por Colab:")
-                
-                # Crear una tabla con los resultados
-                df = pd.DataFrame({
-                    'Métrica': [
-                        'Número original',
-                        'Cuadrado',
-                        'Raíz cuadrada',
-                        'Doble',
-                        'Mitad'
-                    ],
-                    'Valor': [
-                        resultado.get('numero_original', 'N/A'),
-                        resultado.get('cuadrado', 'N/A'),
-                        resultado.get('raiz_cuadrada', 'N/A'),
-                        resultado.get('doble', 'N/A'),
-                        resultado.get('mitad', 'N/A')
-                    ]
-                })
-                
-                st.dataframe(df)
-                
-                # Información adicional
-                st.info(f"Procesado por: {resultado.get('procesado_por', 'Desconocido')}")
-                st.text(f"Timestamp: {resultado.get('timestamp', 'N/A')}")
+    1. **En Google Colab:**
+       - Abre tu notebook "Streamlit" existente
+       - Crea una nueva celda
+       - Copia todo el código de la sección "API en Colab"
+       - Ejecuta la celda
+       - Espera a que se configure el túnel ngrok
+       - Copia la URL que aparece (algo como https://xxxx-xx-xx-xxx-xx.ngrok.io)
+    
+    2. **En esta aplicación Streamlit:**
+       - Pega la URL en el campo del paso 1
+       - Haz clic en "Guardar y verificar conexión"
+       - Si la conexión es exitosa, verás un mensaje verde
+    
+    3. **Prueba la integración:**
+       - Ingresa un número en el campo del paso 2
+       - Haz clic en "Procesar en Colab"
+       - Streamlit enviará el número a Colab a través de la API
+       - Colab procesará el número y devolverá los resultados
+       - Los resultados se mostrarán automáticamente en Streamlit
+    
+    **Nota:** Esta es una conexión en tiempo real. No se necesitan pasos manuales ni transferencia de archivos.
+    """)
+
+# Información del estado de la conexión
+st.sidebar.header("Estado de la conexión")
+if st.session_state.api_url:
+    st.sidebar.success(f"✅ Conectado a: {st.session_state.api_url}")
+    
+    if st.sidebar.button("Verificar estado"):
+        exito, mensaje = verificar_conexion(st.session_state.api_url)
+        if exito:
+            st.sidebar.success(mensaje)
+        else:
+            st.sidebar.error(mensaje)
 else:
-    st.info("No hay tareas enviadas. Ingresa un número y haz clic en 'Procesar en Colab'.")
+    st.sidebar.warning("❌ No conectado")
+    st.sidebar.info("Configura la URL de la API en el paso 1")
 
 # Información adicional
-st.markdown("---")
-st.caption("Versión adaptada para trabajar con tu notebook 'Streamlit' existente")
+st.sidebar.markdown("---")
+st.sidebar.caption("Integración en tiempo real Streamlit-Colab")
